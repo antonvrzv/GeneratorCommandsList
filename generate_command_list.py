@@ -111,7 +111,7 @@ class GeneratorCommandList(object):
         if os.path.exists(CURRENT_WORKING_DIR):
             rmtree(CURRENT_WORKING_DIR)
             print(f"Current working directory "\
-                f"{CURRENT_WORKING_DIR}' was deleted")
+                f"'{CURRENT_WORKING_DIR}' was deleted")
 
 
 def usage():
