@@ -11,10 +11,15 @@ CURRENT_WORKING_DIR = './xmls'
 PATH_TO_DIR_WITH_TYPES = CURRENT_WORKING_DIR + '/types_xmls'
 PATH_TO_DIR_WITH_COMMANDS = CURRENT_WORKING_DIR + '/commands_xmls'
 
-PARAM_TAG = 'PARAM'
-COMMAND_TAG = 'COMMAND'
-PTYPE_TAG = 'PTYPE'
 VIEW_TAG = 'VIEW'
+NAMESPACE_TAG = 'NAMESPACE'
+COMMAND_TAG = 'COMMAND'
+PARAM_TAG = 'PARAM'
+SWITCH_TAG = 'SWITCH'
+SUBCOMMAND_TAG = 'SUBCOMMAND'
+PTYPE_TAG = "PTYPE"
+
+TAGS = (VIEW_TAG, COMMAND_TAG, PARAM_TAG, SWITCH_TAG, SUBCOMMAND_TAG)
 
 board_types = ('esr1000', 'esr1200',
                'esr15', 'esr15xx',
@@ -25,8 +30,6 @@ board_types = ('esr1000', 'esr1200',
                'vesr', 'wlc30')
 
 
-# Класс, отвечающий за генерацию списка имен файлов,
-# удовлетворяющих заданному требованию.
 class GeneratorCommandList(object):
     def __init__(self, set_of_ptypes):
         self.set_of_ptypes = set_of_ptypes
@@ -61,111 +64,49 @@ class GeneratorCommandList(object):
     def __prepare_set_of_commands(self,
                                   set_of_commands,
                                   parent_node,
-                                  tag,
                                   command_name):
-        if tag == PARAM_TAG and \
-           parent_node.find(PARAM_TAG) is None:
-                return
 
-        for node in parent_node.findall(tag):
-            # Если мы встретили нужный ptype,
-            # то нет смысла обрабатывать другие параметры команды,
-            # т.к. мы уже добавили эту команду в список,
-            # ptype которой удовлетворяет требованию,
-            # просто возвращаем управление и переходим к следущей команде.
-            if tag == PARAM_TAG and \
-               command_name in set_of_commands:
-                return
 
-            if tag == COMMAND_TAG:
-                command_name = node.attrib.get('name')
+        for tag in TAGS:
+            for node in parent_node.findall(tag):
+                if tag == COMMAND_TAG:
+                    command_name = node.attrib.get('name')
 
-            attr_ptype = node.attrib.get('ptype')
-            if attr_ptype is not None and \
-               attr_ptype in self.set_of_ptypes:
-                    set_of_commands.add(command_name)
+                attr_ptype = node.attrib.get('ptype')
+                if attr_ptype is not None or \
+                   attr_ptype in self.set_of_ptypes:
+                        if attr_ptype in self.set_of_ptypes:
+                            set_of_commands.add(command_name)
+                            continue
 
-                    if tag == COMMAND_TAG:
-                        # Если мы встретили нужный ptype у команды
-                        # (что маловеротяно,
-                        # т.к. они обычно указываются у параметров),
-                        # то это значит мы нашли, то что хотели(команду),
-                        # просто переходим к следующей команде.
-                        continue
-                    elif tag == PARAM_TAG:
-                        # Если мы встретили нужный ptype у параметра,
-                        # то это значит мы нашли, то что хотели(команду),
-                        # просто возвращаем управление в цикл обработки
-                        # следующей команды.
-                        return
+                self.__prepare_set_of_commands(set_of_commands,
+                                               node,
+                                               command_name)
 
-            self.__prepare_set_of_commands(set_of_commands,
-                                           node,
-                                           PARAM_TAG,
-                                           command_name)
-
-    # Публичный метод, который выполняет генерацию списка команд,
-    # удовлетворящих требованию, в файл commands.list.
     def generate_command_list(self):
         print("Generating commands list...")
 
-        # Словарь, содержащий пары ключ-значение.
-        # Ключ - имя файла, в котором были найдены команды.
-        # Значение - множестово всех найденных комманд
-        # в рамках одного xml-файла.
-        # Используется для генерации списка комманд
-        # в файл commands.list.
         dict_of_commands = dict()
-
-        # Используется для промежуточного добавления команд
-        # в рамках обработки одного xml-файла.
         set_of_commands = set()
 
-        # Обрабатываем все xml-файлы с командами.
         for file in os.scandir(PATH_TO_DIR_WITH_COMMANDS):
             xml_file = file.path
 
-            # Парсим xml-файл в дерево тегов
             xml_tree = ET.parse(xml_file)
-
-            # Получаем узел <CLISH_MODULE> из дерева xml.
             clish_module = xml_tree.getroot()
-            # Получаем дочерний узел <VIEW> из родительского <CLISH_MODULE>
-            view = clish_module.find(VIEW_TAG)
 
-            # Приватный метод, который подготавливает множество
-            # (для дальнейшей генерации в файл), состоящее из имен команд,
-            # которые удовлетворяют требованию.
-            # Множество set_of_commands, содержит команды,
-            # описанные в рамках одного,
-            # конкретного xml-файла.
             self.__prepare_set_of_commands(set_of_commands,
-                                           view,
-                                           COMMAND_TAG,
+                                           clish_module,
                                            None)
 
-            # Добавляем элемент в словарь:
-            # Ключ - имя файла
-            # Значение - копия множества команд, в рамках файла
-
-            # Проверяем наличие комманд во множестве
             is_empty = (len(set_of_commands) == 0)
             if not is_empty:
                 dict_of_commands[file.name] = set_of_commands.copy()
-                # После копирования в словарь,
-                # очищаем текущее множество команд
-                # для обработки следующего xml-файла.
                 set_of_commands.clear()
 
-        # Подготавливаем форматированную строку
-        # со списком имен файлов и найденых команд внутри них.
         commands_string = self.__prepare_string_of_commands(dict_of_commands)
-        # Записываем строку в файл commands.list.
         self.__write_string_to_file(commands_string)
 
-    # Деинициализатор, который очищает рабочее окружение
-    # после освобождения экземляра класса из памяти
-    # (по факту завершение программы после генерации)
     def __del__(self):
         if os.path.exists(CURRENT_WORKING_DIR):
             rmtree(CURRENT_WORKING_DIR)
@@ -180,16 +121,9 @@ def usage():
           ' (build/apps/clish/xml-files)\n')
 
 
-# Подготовка рабочего окружения
-# Метод создает директории './xmls/types_xmls' и './xmls/commands_xmls'.
-# В './xmls/types_xmls' - копируются xml-файлы с типами:
-# общий types.xml и специфичные для железок types-esr<board_type>.xml.
-# В './xmls/commands_xmls' - копируются xml-файлы с командами из common
-# (кроме types.xml).
 def prepare_working_dir_with_xmls(path_to_project_xmls_dir):
     print("Preparing working directory...")
-    # Дополнительный слой защиты, на случай,
-    # если что-то пойдет не так и рабочая директория не удалится.
+
     if os.path.exists(CURRENT_WORKING_DIR):
         rmtree(CURRENT_WORKING_DIR)
 
@@ -215,11 +149,6 @@ def prepare_working_dir_with_xmls(path_to_project_xmls_dir):
     print("Preparing working directory done\n")
 
 
-# Создает множество с типами, паттерн которых содержит заданную подстроку
-# Используется при обработки комманд -
-# ptype команды проверяется на наличие в этом множестве.
-# Eсли ptype команды является элементом этого множества,
-# то команда попадает в список команд для генерации.
 def create_set_of_ptypes():
     search_substring = '[1-2]/'
     search_substring_with_escaping = '[1-2]\\/'
@@ -240,18 +169,6 @@ def create_set_of_ptypes():
                    search_substring_with_escaping in attr_pattern:
                         set_of_ptypes.add(node.attrib.get('name'))
 
-        # Применяем оперцию над множествами - объединения для ptypов
-        # из разных файлов.
-        # Примечание: так как множество является неупорядоченной коллекцией
-        # УНИКАЛЬНЫХ значений,
-        # оно исключает дубликаты значений, например, тип TYPE_TWENTYFIVEGIGETH
-        # определен и для esr3200, и для esr3300,
-        # однако, кол-во портов у них разное, но и тот и другой
-        # содержит подстроку '[1-2]/' или '[1-2]/\', соотвественно,
-        # при обходе всех файлов с типами, во множество будет добален
-        # только один из них(первый, который встретиться).
-        # Нам нет необходимости хранить 2 экземпляра, так как нам главное,
-        # что бы содержалась нужная подстрока.
         set_of_result_ptypes = set_of_result_ptypes.union(set_of_ptypes)
 
     return set_of_result_ptypes
@@ -261,6 +178,11 @@ def validate_path(path):
     if not os.path.exists(path):
         print(f"error: - path to '{path}' is not exist")
         sys.exit(1)
+
+    path_to_common_dir = path + '/common'
+    if not os.path.exists(path_to_common_dir):
+        print(f"error: - common directory with xml files is not exist in '{path}'")
+        sys.exit(1)   
 
 
 def main(argv):
@@ -294,12 +216,5 @@ def main(argv):
     generator_command_list.generate_command_list()
 
 
-# Защита от случайного вызова кода, который не должен выполняться,
-# например, при импортировании программы в качестве модуля для использования
-# отдельных блоков кода(классы, методы итд).
-# При чтении программы, интерпретатор питона создает переменную в памяти
-# для хранения __name__,
-# В случае, если мы запускаем ее как самостоятельную программу,
-# переменная содержит значение __main__.
 if __name__ == '__main__':
     main(sys.argv[1:])
