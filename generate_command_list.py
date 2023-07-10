@@ -40,7 +40,7 @@ class GeneratorCommandList(object):
         path_to_commands_list = CURRENT_DIR + self.commands_list_name
         with open(path_to_commands_list, "w") as f:
             f.write(string)
-        print(f"'{path_to_commands_list}'' is ready")
+        print(f"'{path_to_commands_list}' is ready")
         print("Generating commands list done\n")
 
     def __prepare_string_of_commands(self, dict_of_commands):
@@ -204,6 +204,8 @@ def prepare_working_dir_with_xmls(path_to_project_xmls_dir):
             for file in os.scandir(address_dir):
                 if file.name.startswith('types-'):
                     copy(file.path, PATH_TO_DIR_WITH_TYPES)
+                else:
+                    copy(file.path, PATH_TO_DIR_WITH_COMMANDS)
         elif name_dir == 'common':
             copy(address_dir + '/types.xml', PATH_TO_DIR_WITH_TYPES)
             for file in os.scandir(address_dir):
