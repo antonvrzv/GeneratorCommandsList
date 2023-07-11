@@ -64,6 +64,8 @@ class GeneratorCommandList(object):
     def __prepare_set_of_commands(self,
                                   set_of_commands,
                                   parent_node,
+                                  set_of_subcommands,
+                                  dict_of_subcommands,
                                   command_name):
 
 
@@ -72,22 +74,45 @@ class GeneratorCommandList(object):
                 if tag == COMMAND_TAG:
                     command_name = node.attrib.get('name')
 
+                if tag == SUBCOMMAND_TAG:
+                    sub_command_name = node.attrib.get('name')
+
                 attr_ptype = node.attrib.get('ptype')
                 if attr_ptype is not None or \
                    attr_ptype in self.set_of_ptypes:
                         if attr_ptype in self.set_of_ptypes:
                             set_of_commands.add(command_name)
-                            continue
+
+                        if sub_command_name is not None:
+                            set_of_subcommands.add(sub_command_name)
+
 
                 self.__prepare_set_of_commands(set_of_commands,
                                                node,
+                                               set_of_subcommands,
+                                               dict_of_subcommands,
                                                command_name)
+
+                if tag == SUBCOMMAND_TAG:
+                    sub_command_name = None
+
+                if tag == COMMAND_TAG:
+                    is_empty = len(set_of_subcommands) == 0
+                    if not is_empty:
+                        dict_of_subcommands[command_name] = set_of_subcommands.copy()
+                        set_of_subcommands.clear()
+
+
 
     def generate_command_list(self):
         print("Generating commands list...")
 
         dict_of_commands = dict()
+        dict_of_subcommands = dict()
+        dict_of_subcommands_file = dict()
+
         set_of_commands = set()
+        set_of_subcommands = set()
 
         for file in os.scandir(PATH_TO_DIR_WITH_COMMANDS):
             xml_file = file.path
@@ -97,12 +122,20 @@ class GeneratorCommandList(object):
 
             self.__prepare_set_of_commands(set_of_commands,
                                            clish_module,
+                                           set_of_subcommands,
+                                           dict_of_subcommands,
                                            None)
 
             is_empty = (len(set_of_commands) == 0)
             if not is_empty:
                 dict_of_commands[file.name] = set_of_commands.copy()
                 set_of_commands.clear()
+
+                is_empty = (len(dict_of_subcommands) == 0)
+                if not is_empty:
+                    dict_of_subcommands_file[file.name] = dict_of_subcommands.copy()
+                    dict_of_subcommands.clear()
+
 
         commands_string = self.__prepare_string_of_commands(dict_of_commands)
         self.__write_string_to_file(commands_string)
