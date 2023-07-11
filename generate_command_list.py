@@ -46,7 +46,9 @@ class GeneratorCommandList(object):
         print(f"'{path_to_commands_list}' is ready")
         print("Generating commands list done\n")
 
-    def __prepare_string_of_commands(self, dict_of_commands):
+    def __prepare_string_of_commands(self,
+                                     dict_of_commands,
+                                     dict_of_subcommands_file):
         commands_string = ('Список xml-файлов и команды, '
                            'которые содержатcя в этих файлах.\n')
         commands_string += ("Команды отфильтрованы по заданной подстроке "
@@ -54,10 +56,20 @@ class GeneratorCommandList(object):
                             "с экранированием и без), "
                             "которая содержится в паттерне "
                             "ptype'а команды.\n\n")
-        for file_name, set_of_commands in dict_of_commands.items():
+
+        sorted_dict_of_commands = dict(sorted(dict_of_commands.items()))
+        for file_name, set_of_commands in sorted_dict_of_commands.items():
             commands_string += f'{file_name}:\n'
-            for command in set_of_commands:
+
+            for command in sorted(set_of_commands):
                 commands_string += f'\t{command}\n'
+
+                if file_name in dict_of_subcommands_file:
+                    dict_of_subcommands = dict_of_subcommands_file[file_name]
+                    if command in dict_of_subcommands:
+                        set_of_subcommands = dict_of_subcommands[command]
+                        for sub_command in sorted(set_of_subcommands):
+                            commands_string += f'\t{command} {sub_command}\n'
 
         return commands_string
 
@@ -66,7 +78,8 @@ class GeneratorCommandList(object):
                                   parent_node,
                                   set_of_subcommands,
                                   dict_of_subcommands,
-                                  command_name):
+                                  command_name,
+                                  sub_command_name):
 
 
         for tag in TAGS:
@@ -78,20 +91,19 @@ class GeneratorCommandList(object):
                     sub_command_name = node.attrib.get('name')
 
                 attr_ptype = node.attrib.get('ptype')
-                if attr_ptype is not None or \
+                if attr_ptype is not None and \
                    attr_ptype in self.set_of_ptypes:
-                        if attr_ptype in self.set_of_ptypes:
-                            set_of_commands.add(command_name)
+                        set_of_commands.add(command_name)
 
                         if sub_command_name is not None:
                             set_of_subcommands.add(sub_command_name)
-
 
                 self.__prepare_set_of_commands(set_of_commands,
                                                node,
                                                set_of_subcommands,
                                                dict_of_subcommands,
-                                               command_name)
+                                               command_name,
+                                               sub_command_name)
 
                 if tag == SUBCOMMAND_TAG:
                     sub_command_name = None
@@ -101,7 +113,6 @@ class GeneratorCommandList(object):
                     if not is_empty:
                         dict_of_subcommands[command_name] = set_of_subcommands.copy()
                         set_of_subcommands.clear()
-
 
 
     def generate_command_list(self):
@@ -124,6 +135,7 @@ class GeneratorCommandList(object):
                                            clish_module,
                                            set_of_subcommands,
                                            dict_of_subcommands,
+                                           None,
                                            None)
 
             is_empty = (len(set_of_commands) == 0)
@@ -136,8 +148,8 @@ class GeneratorCommandList(object):
                     dict_of_subcommands_file[file.name] = dict_of_subcommands.copy()
                     dict_of_subcommands.clear()
 
-
-        commands_string = self.__prepare_string_of_commands(dict_of_commands)
+        commands_string = self.__prepare_string_of_commands(dict_of_commands,
+                                                            dict_of_subcommands_file)
         self.__write_string_to_file(commands_string)
 
     def __del__(self):
